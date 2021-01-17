@@ -7,8 +7,6 @@ import pygame_gui
 import numpy as np
 import rigctl
 
-if expression:
-    pass
 
 BANDWIDTH = 2700
 BANDWIDTH_GUARD = 200 # the bit in the middle
@@ -117,7 +115,11 @@ def main():
                                              manager=manager)
     snd_output = pygame_gui.elements.UIDropDownMenu(options_list=["Select Output"]+cards,starting_option="Select Output", relative_rect=pygame.Rect((int((DRAWABLE_SPACE/ZOOM_DIVIDER)/2), 0), (int((DRAWABLE_SPACE/ZOOM_DIVIDER)/2), SETTINGS_HEIGHT)),
                                              manager=manager)
-    rig = rigctl.Rigctld()
+    try:
+        rig = rigctl.Rigctld()
+    except ConnectionRefusedError:
+        rig = None
+        print("Couldn't connect to rigctl so not using it")
 
 
     # Event loop
@@ -130,18 +132,27 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.MOUSEMOTION:
                 mouse_position = pygame.mouse.get_pos()
+                
             if event.type == pygame.MOUSEBUTTONUP:
                 tones.stop()
+                if rig:
+                    rig.ptt_disable()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_position = pygame.mouse.get_pos()
-                tones.sineFrequency = xpos_to_tone(mouse_position[0])
-                tones.sineFrequency1 = ypos_to_tone(mouse_position[1])
-                tones.start()
+                if type(snd_input.current_state) == pygame_gui.elements.ui_drop_down_menu.UIClosedDropDownState and type(snd_output.current_state) == pygame_gui.elements.ui_drop_down_menu.UIClosedDropDownState:
+                    mouse_position = pygame.mouse.get_pos()
+                    if mouse_position[0] > SETTINGS_HEIGHT and mouse_position[0] < int(DRAWABLE_SPACE/ZOOM_DIVIDER) + SETTINGS_HEIGHT and mouse_position[1] > 0 and mouse_position[1] < int(DRAWABLE_SPACE/ZOOM_DIVIDER) :
+                        tones.sineFrequency = xpos_to_tone(mouse_position[0])
+                        tones.sineFrequency1 = ypos_to_tone(mouse_position[1])
+                        tones.start()
+                        if rig:
+                            rig.ptt_enable()
             if pygame.mouse.get_pressed()[0]:
-                mouse_position = pygame.mouse.get_pos()
-                tones.sineFrequency = xpos_to_tone(mouse_position[0])
-                tones.sineFrequency1 = ypos_to_tone(mouse_position[1])
-                swirly_things_draw.append(swirly_thing((mouse_position)))
+                if type(snd_input.current_state) == pygame_gui.elements.ui_drop_down_menu.UIClosedDropDownState and type(snd_output.current_state) == pygame_gui.elements.ui_drop_down_menu.UIClosedDropDownState:
+                    if mouse_position[0] > 0 and mouse_position[0] < int(DRAWABLE_SPACE/ZOOM_DIVIDER) and mouse_position[1] > SETTINGS_HEIGHT and mouse_position[1] < int(DRAWABLE_SPACE/ZOOM_DIVIDER) + SETTINGS_HEIGHT:
+                        mouse_position = pygame.mouse.get_pos()
+                        tones.sineFrequency = xpos_to_tone(mouse_position[0])
+                        tones.sineFrequency1 = ypos_to_tone(mouse_position[1])
+                        swirly_things_draw.append(swirly_thing((mouse_position)))
             if event.type == pygame.USEREVENT:
                 if event.user_type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
                     if event.ui_element == snd_input:
