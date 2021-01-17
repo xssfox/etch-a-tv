@@ -4,6 +4,11 @@ import random
 import time 
 import modem
 import pygame_gui
+import numpy as np
+import rigctl
+
+if expression:
+    pass
 
 BANDWIDTH = 2700
 BANDWIDTH_GUARD = 200 # the bit in the middle
@@ -16,10 +21,7 @@ SETTINGS_HEIGHT = 25
 swirly_things_draw = []
 swirly_things_rx = []
 
-# number of candidates to check 
-# CHECK_CANDIDATES = 5
-# candidates = []
-
+snr = [0 for x in range(25)]
 
 class swirly_thing(pygame.Rect):
         def __init__(self, location):
@@ -46,9 +48,15 @@ threshold = None
 should_link = False
 
 def rx_callback(peaks_power_list, fft_data, freq, dbfs, power_nf):
-    global should_link, threshold
+    global should_link, threshold, snr
     link = should_link
     should_link = False
+    try:
+        db_above_nf = int(max(fft_data) - power_nf)
+    except ValueError:
+        db_above_nf = 0
+    snr.pop(0)
+    snr.append(db_above_nf)
     try:
         tones = sorted([peaks_power_list[0], peaks_power_list[1]])
     except IndexError:
@@ -56,9 +64,6 @@ def rx_callback(peaks_power_list, fft_data, freq, dbfs, power_nf):
     if freq[list(fft_data).index(max(fft_data))] > 3000: 
         return
     else:
-        
-        db_above_nf = int(max(fft_data) - power_nf)
-        print(db_above_nf)
         try:
             if db_above_nf < threshold.get_current_value(): # todo make this configurable
                 return
@@ -89,22 +94,31 @@ def rx_callback(peaks_power_list, fft_data, freq, dbfs, power_nf):
 waterfall_surf = pygame.surface.Surface((int((DRAWABLE_SPACE/ZOOM_DIVIDER)*2), DRAWABLE_SPACE / ZOOM_DIVIDER))
 
 
-
 def main():
     # Initialise screen
     global threshold
     pygame.init()
+    
     clock = pygame.time.Clock()
     screen = pygame.display.set_mode((int((DRAWABLE_SPACE/ZOOM_DIVIDER)*2), int(DRAWABLE_SPACE/ZOOM_DIVIDER) + SETTINGS_HEIGHT))
     pygame.display.set_caption('Etch A TV')
 
     tones = modem.Modem(rx_callback)
+    cards = [ f"[{str(i)}] {x}" for i, x in enumerate(tones.list_audio_devices())]
+    in_card = None
+    out_card = None
     tones.sineFrequency2 = TX_OFFSET + TONE_BANDWIDTH + (BANDWIDTH_GUARD/2) # pilot tone
 
     manager = pygame_gui.UIManager((int((DRAWABLE_SPACE/ZOOM_DIVIDER)*2), int(DRAWABLE_SPACE/ZOOM_DIVIDER) + SETTINGS_HEIGHT))
-    threshold = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((0, 0), (int((DRAWABLE_SPACE/ZOOM_DIVIDER)*2), SETTINGS_HEIGHT)),
+    threshold = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((int(DRAWABLE_SPACE/ZOOM_DIVIDER), 0), (int((DRAWABLE_SPACE/ZOOM_DIVIDER)), SETTINGS_HEIGHT)),
                                              start_value=40, value_range=(0,100),
                                              manager=manager)
+    snd_input = pygame_gui.elements.UIDropDownMenu(options_list=["Select Input"]+cards,starting_option="Select Input", relative_rect=pygame.Rect((0, 0), (int((DRAWABLE_SPACE/ZOOM_DIVIDER)/2), SETTINGS_HEIGHT)),
+                                             manager=manager)
+    snd_output = pygame_gui.elements.UIDropDownMenu(options_list=["Select Output"]+cards,starting_option="Select Output", relative_rect=pygame.Rect((int((DRAWABLE_SPACE/ZOOM_DIVIDER)/2), 0), (int((DRAWABLE_SPACE/ZOOM_DIVIDER)/2), SETTINGS_HEIGHT)),
+                                             manager=manager)
+    rig = rigctl.Rigctld()
+
 
     # Event loop
     while 1:
@@ -112,7 +126,7 @@ def main():
         background = pygame.Surface(screen.get_size())
         background = background.convert()
         background.fill((255, 242, 255))
-        pygame.draw.line(background, (85, 205, 252), (DRAWABLE_SPACE/ZOOM_DIVIDER,0), (DRAWABLE_SPACE/ZOOM_DIVIDER,DRAWABLE_SPACE/ZOOM_DIVIDER))
+        pygame.draw.line(background, (85, 205, 252), (DRAWABLE_SPACE/ZOOM_DIVIDER,0), (DRAWABLE_SPACE/ZOOM_DIVIDER,(DRAWABLE_SPACE/ZOOM_DIVIDER)+ SETTINGS_HEIGHT))
         for event in pygame.event.get():
             if event.type == pygame.MOUSEMOTION:
                 mouse_position = pygame.mouse.get_pos()
@@ -128,6 +142,19 @@ def main():
                 tones.sineFrequency = xpos_to_tone(mouse_position[0])
                 tones.sineFrequency1 = ypos_to_tone(mouse_position[1])
                 swirly_things_draw.append(swirly_thing((mouse_position)))
+            if event.type == pygame.USEREVENT:
+                if event.user_type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
+                    if event.ui_element == snd_input:
+                        if event.text == "Select Input":
+                            in_card = None
+                        else:
+                            in_card = int(event.text.split("]")[0].split("[")[1])
+                    if event.ui_element == snd_output:
+                        if event.text == "Select Output":
+                            out_card = None
+                        else:
+                            out_card = int(event.text.split("]")[0].split("[")[1])
+                    tones.set_cards(in_card, out_card)
             if event.type == QUIT:
                 return
             manager.process_events(event)
@@ -153,6 +180,12 @@ def main():
                 #pygame.draw.line(background, (85, 205, 252), x.center, last_rx.center,  1+int(x.decay/16))
             last_rx = x
         manager.draw_ui(background)
+
+        snr_value = np.mean(snr)
+        #draw the signal level over the top of the bar
+        snr_bar_length = int(DRAWABLE_SPACE/ZOOM_DIVIDER) + ((((snr_value)/100) * int((DRAWABLE_SPACE/ZOOM_DIVIDER)*2))/2)
+        pygame.draw.line(background, (0,0,255), (snr_bar_length,0), (int(snr_bar_length),SETTINGS_HEIGHT), 3)
+
         screen.blit(background, (0, 0))
         pygame.display.flip()
         
