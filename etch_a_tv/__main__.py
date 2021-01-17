@@ -2,10 +2,9 @@ import pygame
 from pygame.locals import *
 import random
 import time
-import modem
+from . import modem, rigctl
 import pygame_gui
 import numpy as np
-import rigctl
 
 
 BANDWIDTH = 2700

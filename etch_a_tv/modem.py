@@ -101,17 +101,19 @@ class Modem:
                 )
                 self.RATE = 48000
             except ValueError:
-                valid = self.p.is_format_supported(
-                    48000,
-                    input_device=in_card,
-                    output_device=out_card,
-                    input_format=self.p.get_format_from_width(self.WIDTH),
-                    output_format=self.p.get_format_from_width(self.WIDTH),
-                    input_channels=1,
-                    output_channels=1,
-                )
-                self.RATE = 44100
-
+                try:
+                    valid = self.p.is_format_supported(
+                        48000,
+                        input_device=in_card,
+                        output_device=out_card,
+                        input_format=self.p.get_format_from_width(self.WIDTH),
+                        output_format=self.p.get_format_from_width(self.WIDTH),
+                        input_channels=1,
+                        output_channels=1,
+                    )
+                    self.RATE = 44100
+                except ValueError:
+                    print("Couldn't start sound configuration. Only 48000 / 44100 is supported at the moment. Ensure that your sound configuration is correct")
             self.stream = self.p.open(
                 format=self.p.get_format_from_width(self.WIDTH),
                 channels=1,
