@@ -2,7 +2,7 @@ import pygame
 from pygame.locals import *
 import random
 import time 
-import tone_generator
+import modem
 
 BANDWIDTH = 2700
 BANDWIDTH_GUARD = 50 # the bit in the middle
@@ -35,6 +35,22 @@ def ypos_to_tone(y):
     y = y * ZOOM_DIVIDER
     y = TX_OFFSET + TONE_BANDWIDTH + BANDWIDTH_GUARD +  y
     return y
+
+def rx_callback(peaks_power_list, fft_data, freq):
+    try:
+        tones = sorted([peaks_power_list[0], peaks_power_list[1]])
+        x= (tones[0]- TX_OFFSET)/ ZOOM_DIVIDER
+        y= (tones[1]  - TX_OFFSET - TONE_BANDWIDTH  - BANDWIDTH_GUARD ) / ZOOM_DIVIDER
+        location = (x+ (DRAWABLE_SPACE/ZOOM_DIVIDER),y )
+        print(location)
+        swirly_things_rx.append(swirly_thing(location))
+    except:
+        pass
+    
+    #print(peaks_power_list)
+    # check if we even have peaks in our desired range
+    # find drawable x / y from freq
+    # swirly_things_rx.append(swirly_thing((mouse_position)))
     
 def main():
     # Initialise screen
@@ -43,8 +59,8 @@ def main():
     screen = pygame.display.set_mode((int(DRAWABLE_SPACE), int(DRAWABLE_SPACE/ZOOM_DIVIDER)))
     pygame.display.set_caption('Etch A TV')
 
-    # Fill background
-    tones = tone_generator.modulate()
+    tones = modem.Modem(rx_callback)
+    tones.sineFrequency2 = TX_OFFSET + TONE_BANDWIDTH + (BANDWIDTH_GUARD/2) # pilot tone
 
     # Event loop
     while 1:
@@ -78,12 +94,15 @@ def main():
         for x in swirly_things_rx:
             x.update()
             if x.opacity <= 0:
-                swirly_things_draw.remove(x)
+                try:
+                    swirly_things_draw.remove(x)
+                except ValueError:
+                    pass
             else:
                 pygame.draw.circle(background, (85, 205, 252), x.center, x.opacity/64)
         screen.blit(background, (0, 0))
         pygame.display.flip()
-        clock.tick(100)
+        clock.tick(50)
 
 
 if __name__ == '__main__': main()
