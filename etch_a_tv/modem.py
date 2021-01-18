@@ -114,6 +114,8 @@ class Modem:
                     self.RATE = 44100
                 except ValueError:
                     print("Couldn't start sound configuration. Only 48000 / 44100 is supported at the moment. Ensure that your sound configuration is correct")
+                    self.stream = None
+                    return
             self.stream = self.p.open(
                 format=self.p.get_format_from_width(self.WIDTH),
                 channels=1,
